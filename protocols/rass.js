@@ -168,7 +168,8 @@ function sendCommandToPanel(socket, commandType, accountNo, zone = "000") {
 
   const cmd = buildRASSControlCommand(seq, accountNo, clientId, rassContent);
   socket.write(cmd);
-  console.log(`📤 RASS Command Sent [${commandType}]: ${cmd.replace(/\n/g, '\\n').replace(/\r/g, '\\r')}`);
+  console.log(`\n📤 [RASS] Command Sent [${commandType}]:`);
+  console.log(`   Raw Format: ${cmd.replace(/\n/g, '\\n').replace(/\r/g, '\\r')}`);
   return true;
 }
 
@@ -182,8 +183,14 @@ function handleSocketEvents(socket, remoteIp, initialAccount = null) {
     const message = data.toString().trim();
     if (!message) return;
 
+    console.log(`\n📩 [RASS] Raw Data Received:`, message);
+
     const header = parseSIAHeader(message);
     const decoded = decodeSIA(message);
+
+    console.log(`🔓 [RASS] Decoded Meaning:`);
+    console.log(JSON.stringify(decoded, null, 2));
+
     if (header && !decoded.account) decoded.account = header.account;
 
     if (decoded.code === 'YY' && decoded.zone === '001' && decoded.macId) {

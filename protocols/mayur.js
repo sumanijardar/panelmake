@@ -132,7 +132,8 @@ function sendCommandToPanel(socket, commandType, accountNo, zone = "000") {
     return false;
   }
   socket.write(cmd);
-  console.log(`📤 MAYUR SIA Command Sent [${commandType}]: ${cmd.replace(/\n/g, '\\n').replace(/\r/g, '\\r')}`);
+  console.log(`\n📤 [MAYUR] Command Sent [${commandType}]:`);
+  console.log(`   Raw Format: ${cmd.replace(/\n/g, '\\n').replace(/\r/g, '\\r')}`);
   return true;
 }
 
@@ -150,8 +151,13 @@ function startServer() {
       const message = data.toString().trim();
       if (!message) return;
 
+      console.log(`\n📩 [MAYUR] Raw Data Received:`, message);
+
       const header = parseSIAHeader(message);
       const decoded = decodeSIA(message);
+
+      console.log(`🔓 [MAYUR] Decoded Meaning:`);
+      console.log(JSON.stringify(decoded, null, 2));
 
       if (header && !decoded.account) {
         decoded.account = header.account;
