@@ -1,0 +1,139 @@
+const http = require("http");
+const { URL } = require("url");
+const pool = require("./config/database");
+
+// Import protocol handlers
+const mayurProtocol = require("./protocols/mayur");
+const rassProtocol = require("./protocols/rass");
+
+// Start TCP Servers and dialers
+console.log("Starting Protocol Managers...");
+mayurProtocol.startServer();
+rassProtocol.startServer();
+
+// ============================================================================
+// 🌐 UNIVERSAL HTTP API SERVER
+// ============================================================================
+const API_PORT = 3000;
+
+const apiServer = http.createServer(async (req, res) => {
+  const parsedUrl = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Content-Type', 'application/json');
+
+  // Unified routing helper
+  const handleRequest = async (account, action) => {
+    if (!account) {
+      res.writeHead(400);
+      return res.end(JSON.stringify({ error: "Missing 'account' parameter." }));
+    }
+
+    try {
+      const [rows] = await pool.query(
+        "SELECT Panel_Make FROM sites_zicom WHERE NewPanelID = ? LIMIT 1",
+        [account]
+      );
+
+      if (rows.length === 0) {
+        res.writeHead(404);
+        return res.end(JSON.stringify({ error: `Panel ID ${account} not found in database.` }));
+      }
+
+      const panelMake = (rows[0].Panel_Make || "").toString().trim().toUpperCase();
+      
+      let handler = null;
+      if (panelMake === 'MAYUR') handler = mayurProtocol;
+      else if (panelMake === 'RASS') handler = rassProtocol;
+      
+      if (!handler) {
+        res.writeHead(400);
+        return res.end(JSON.stringify({ error: `Unsupported Panel Make: ${panelMake}` }));
+      }
+
+      await action(handler, panelMake);
+    } catch (dbErr) {
+      console.error("❌ Database query error:", dbErr.message);
+      res.writeHead(500);
+      res.end(JSON.stringify({ error: "Database error", details: dbErr.message }));
+    }
+  };
+
+  // --- /api/check ---
+  if (parsedUrl.pathname === '/api/check' && req.method === 'GET') {
+    const account = parsedUrl.searchParams.get('account');
+    await handleRequest(account, async (handler, make) => {
+      const result = await handler.checkConnection(account, 100); 
+      res.writeHead(200);
+      res.end(JSON.stringify({ ...result, panelMake: make }));
+    });
+  }
+
+  // --- /api/connect ---
+  else if (parsedUrl.pathname === '/api/connect' && req.method === 'GET') {
+    const account = parsedUrl.searchParams.get('account');
+    const wait = parseInt(parsedUrl.searchParams.get('wait') || '60') * 1000;
+    await handleRequest(account, async (handler, make) => {
+      const result = await handler.checkConnection(account, wait);
+      res.writeHead(200);
+      res.end(JSON.stringify({ ...result, panelMake: make }));
+    });
+  }
+
+  // --- /api/command ---
+  else if (parsedUrl.pathname === '/api/command' && req.method === 'GET') {
+    const account = parsedUrl.searchParams.get('account');
+    const command = parsedUrl.searchParams.get('command');
+    const zone = parsedUrl.searchParams.get('zone') || '000';
+    const wait = parseInt(parsedUrl.searchParams.get('wait') || '60') * 1000;
+
+    if (!command) {
+      res.writeHead(400);
+      return res.end(JSON.stringify({ error: "Missing 'command' parameter." }));
+    }
+
+    await handleRequest(account, async (handler, make) => {
+      console.log(`\n🌐 [API] Request routed to ${make} panel #${account} (Cmd: ${command}, Zone: ${zone})`);
+      const result = await handler.queueCommand(account, command, zone, wait);
+      res.writeHead(result.success ? 200 : (result.status === 'timeout' ? 200 : 500));
+      res.end(JSON.stringify({ ...result, panelMake: make }));
+    });
+  }
+
+  // --- /api/events ---
+  else if (parsedUrl.pathname === '/api/events' && req.method === 'GET') {
+    const account = parsedUrl.searchParams.get('account');
+    const last = parseInt(parsedUrl.searchParams.get('last') || '0');
+    
+    if (account) {
+      await handleRequest(account, async (handler, make) => {
+        const result = handler.getEvents(account, last);
+        res.writeHead(200);
+        res.end(JSON.stringify({ ...result, panelMake: make }));
+      });
+    } else {
+      // If no account specified, combine events from both
+      const mayurEvts = mayurProtocol.getEvents(null, last).events;
+      const rassEvts = rassProtocol.getEvents(null, last).events;
+      res.writeHead(200);
+      res.end(JSON.stringify({ success: true, count: mayurEvts.length + rassEvts.length, mayurEvents: mayurEvts, rassEvents: rassEvts }));
+    }
+  }
+
+  // --- /api/status ---
+  else if (parsedUrl.pathname === '/api/status' && req.method === 'GET') {
+    const mayurStatus = mayurProtocol.getStatus().devices;
+    const rassStatus = rassProtocol.getStatus().devices;
+    res.writeHead(200);
+    res.end(JSON.stringify({ success: true, mayur: mayurStatus, rass: rassStatus }));
+  }
+
+  else {
+    res.writeHead(404);
+    res.end(JSON.stringify({ error: "Route not found. Supported routes: /api/check, /api/connect, /api/command, /api/events, /api/status" }));
+  }
+});
+
+apiServer.listen(API_PORT, () => {
+  console.log(`\n🚀 Universal API Server running on port ${API_PORT}`);
+  console.log(`🌐 Test URL: http://localhost:${API_PORT}/api/command?account=040037&command=ARM&zone=000`);
+});
