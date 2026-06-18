@@ -22,11 +22,12 @@ async function refreshCache() {
 
     for (const row of rows) {
       if (row.panelid) {
-        if (!panelConfigCache.has(row.panelid)) {
-          panelConfigCache.set(row.panelid, []);
+        const pIdStr = String(row.panelid).trim();
+        if (!panelConfigCache.has(pIdStr)) {
+          panelConfigCache.set(pIdStr, []);
         }
 
-        panelConfigCache.get(row.panelid).push({
+        panelConfigCache.get(pIdStr).push({
           destination: row.destination,
           alarmCodeArr: toArray(row.alarm_code),
           level1Arr: toArray(row.level_1),
