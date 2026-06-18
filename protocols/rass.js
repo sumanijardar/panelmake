@@ -270,13 +270,21 @@ function handleSocketEvents(socket, remoteIp, initialAccount = null) {
 }
 
 function initiatePanelConnection(panelId, ip) {
+  console.log(`\n⏳ [RASS] Attempting OUTGOING connection to Panel #${panelId} at IP: ${ip}:${TCP_PORT}...`);
   const socket = new net.Socket();
+  
   socket.connect(TCP_PORT, ip, () => {
+    console.log(`✅ [RASS] Successfully connected to Panel #${panelId} (${ip})`);
     activeSockets.set(panelId, socket);
     handleSocketEvents(socket, ip, panelId);
   });
-  socket.on("error", () => {});
+  
+  socket.on("error", (err) => {
+    console.log(`❌ [RASS] Connection failed to Panel #${panelId} (${ip}): ${err.message}`);
+  });
+  
   socket.on("close", () => {
+    console.log(`⚠️ [RASS] Connection closed for Panel #${panelId} (${ip}). Retrying in 60s...`);
     setTimeout(() => {
       if (!activeSockets.has(panelId) || activeSockets.get(panelId).destroyed) {
         initiatePanelConnection(panelId, ip);
@@ -288,12 +296,19 @@ function initiatePanelConnection(panelId, ip) {
 async function connectToAllPanels() {
   try {
     const [rows] = await pool.query("SELECT NewPanelID, dvrip FROM sites_zicom WHERE Panel_Make LIKE 'rass' AND dvrip IS NOT NULL AND dvrip != '' LIMIT 10");
-    for (const row of rows) {
-      const panelId = String(row.NewPanelID).trim();
-      const ip = String(row.dvrip).trim();
-      if (!activeSockets.has(panelId)) initiatePanelConnection(panelId, ip);
+    if (rows && rows.length > 0) {
+      console.log(`\n🔄 [RASS] Found ${rows.length} RASS panels with IPs in database. Initiating outgoing connections...`);
+      for (const row of rows) {
+        const panelId = String(row.NewPanelID).trim();
+        const ip = String(row.dvrip).trim();
+        if (!activeSockets.has(panelId)) initiatePanelConnection(panelId, ip);
+      }
+    } else {
+      console.log(`\nℹ️ [RASS] No RASS panels found in database with valid IP for outgoing connection.`);
     }
-  } catch (err) {}
+  } catch (err) {
+    console.error(`❌ [RASS] Error fetching panels from DB for outgoing connections:`, err.message);
+  }
 }
 
 function startServer() {
@@ -302,6 +317,7 @@ function startServer() {
   
   const tcpServer = net.createServer((socket) => {
     const remoteIp = socket.remoteAddress ? socket.remoteAddress.replace(/^.*:/, '').trim() : null;
+    console.log(`\n📡 [RASS] Incoming TCP Connection Initiated from IP: ${remoteIp}`);
     handleSocketEvents(socket, remoteIp);
   });
   tcpServer.listen(TCP_PORT, () => console.log(`🚀 RASS TCP Server listening on port ${TCP_PORT}`));
