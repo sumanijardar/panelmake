@@ -284,18 +284,18 @@ function initiatePanelConnection(panelId, ip) {
   });
   
   socket.on("close", () => {
-    console.log(`⚠️ [RASS] Connection closed for Panel #${panelId} (${ip}). Retrying in 60s...`);
+    console.log(`⚠️ [RASS] Connection closed for Panel #${panelId} (${ip}). Retrying in 3 minutes...`);
     setTimeout(() => {
       if (!activeSockets.has(panelId) || activeSockets.get(panelId).destroyed) {
         initiatePanelConnection(panelId, ip);
       }
-    }, 60000);
+    }, 180000); // 3 minutes
   });
 }
 
 async function connectToAllPanels() {
   try {
-    const [rows] = await pool.query("SELECT NewPanelID, dvrip FROM sites_zicom WHERE Panel_Make LIKE 'rass' AND dvrip IS NOT NULL AND dvrip != '' LIMIT 10");
+    const [rows] = await pool.query("SELECT NewPanelID, dvrip FROM sites_zicom WHERE Panel_Make LIKE 'rass' AND dvrip IS NOT NULL AND dvrip != ''");
     if (rows && rows.length > 0) {
       console.log(`\n🔄 [RASS] Found ${rows.length} RASS panels with IPs in database. Initiating outgoing connections...`);
       for (const row of rows) {
@@ -313,7 +313,7 @@ async function connectToAllPanels() {
 
 function startServer() {
   connectToAllPanels();
-  setInterval(connectToAllPanels, 120000);
+  setInterval(connectToAllPanels, 180000); // 3 minutes
   
   const tcpServer = net.createServer((socket) => {
     const remoteIp = socket.remoteAddress ? socket.remoteAddress.replace(/^.*:/, '').trim() : null;

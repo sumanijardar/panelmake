@@ -14,7 +14,7 @@ rassProtocol.startServer();
 // ============================================================================
 // 🌐 UNIVERSAL HTTP API SERVER
 // ============================================================================
-const API_PORT = 3000;
+const API_PORT = 3500;
 
 const apiServer = http.createServer(async (req, res) => {
   const parsedUrl = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
@@ -40,11 +40,11 @@ const apiServer = http.createServer(async (req, res) => {
       }
 
       const panelMake = (rows[0].Panel_Make || "").toString().trim().toUpperCase();
-      
+
       let handler = null;
       if (panelMake === 'MAYUR') handler = mayurProtocol;
       else if (panelMake === 'RASS') handler = rassProtocol;
-      
+
       if (!handler) {
         res.writeHead(400);
         return res.end(JSON.stringify({ error: `Unsupported Panel Make: ${panelMake}` }));
@@ -62,7 +62,7 @@ const apiServer = http.createServer(async (req, res) => {
   if (parsedUrl.pathname === '/api/check' && req.method === 'GET') {
     const account = parsedUrl.searchParams.get('account');
     await handleRequest(account, async (handler, make) => {
-      const result = await handler.checkConnection(account, 100); 
+      const result = await handler.checkConnection(account, 100);
       res.writeHead(200);
       res.end(JSON.stringify({ ...result, panelMake: make }));
     });
@@ -103,7 +103,7 @@ const apiServer = http.createServer(async (req, res) => {
   else if (parsedUrl.pathname === '/api/events' && req.method === 'GET') {
     const account = parsedUrl.searchParams.get('account');
     const last = parseInt(parsedUrl.searchParams.get('last') || '0');
-    
+
     if (account) {
       await handleRequest(account, async (handler, make) => {
         const result = handler.getEvents(account, last);
