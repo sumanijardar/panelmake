@@ -219,11 +219,16 @@ function startServer() {
 
           try {
             await pool.query(`INSERT INTO alerts_copy (panelid, seqno, zone, alarm, createtime, alerttype, status) VALUES (?, ?, ?, ?, ?, ?,'O')`, baseValues);
-          } catch (err) { }
+          } catch (err) { 
+            console.error("❌ DB Error (alerts_copy):", err.message);
+          }
 
           try {
             await pool.query(`INSERT INTO ${targetTable} (panelid, seqno, zone, alarm, createtime, alerttype, status, priority, level) VALUES (?, ?, ?, ?, ?, ?, 'O', ?, ?)`, [...baseValues, priority, level]);
-          } catch (err) { }
+            console.log(`✅ [MAYUR] Data successfully saved to ${targetTable} (Alarm: ${alarmCode})`);
+          } catch (err) { 
+            console.error(`❌ DB Error (${targetTable}):`, err.message);
+          }
         }
       }
 
