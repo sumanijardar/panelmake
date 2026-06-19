@@ -87,7 +87,7 @@ const COMMAND_MAP = {
   'LC_OFF': 'RO',
   'RC': 'RC',
   'RO': 'RO',
-  'MODULE_OFF': 'BZ', 
+  'MODULE_OFF': 'BZ',
 };
 
 if (decodeSIA.SIA_EVENTS) {
@@ -175,7 +175,7 @@ function startServer() {
       if (decoded.account) {
         currentAccount = decoded.account;
         activeSockets.set(currentAccount, socket);
-        
+
         const waiters = connectWaiters.get(currentAccount);
         if (waiters && waiters.length > 0) {
           for (const resolve of waiters) resolve({ account: currentAccount });
@@ -187,8 +187,10 @@ function startServer() {
           const alarmCode = decoded.code;
           const receivedtime = new Date().toISOString().slice(0, 19).replace('T', ' ');
 
-          let priority = 'N', level = 0, targetTable = 'backalerts';
-          const configsArray = panelConfigCache.get(currentAccount);
+          let priority = 'N', level = 0, targetTable = 'alerts';
+          const configsArray = panelConfigCache.get('MAYUR');
+
+          console.log(`🔍 [DEBUG] configsArray for MAYUR:`, JSON.stringify(configsArray, null, 2));
 
           if (configsArray) {
             let matchedConfig = null;
@@ -219,14 +221,14 @@ function startServer() {
 
           try {
             await pool.query(`INSERT INTO alerts_copy (panelid, seqno, zone, alarm, createtime, alerttype, status) VALUES (?, ?, ?, ?, ?, ?,'O')`, baseValues);
-          } catch (err) { 
+          } catch (err) {
             console.error("❌ DB Error (alerts_copy):", err.message);
           }
 
           try {
             await pool.query(`INSERT INTO ${targetTable} (panelid, seqno, zone, alarm, createtime, alerttype, status, priority, level) VALUES (?, ?, ?, ?, ?, ?, 'O', ?, ?)`, [...baseValues, priority, level]);
             console.log(`✅ [MAYUR] Data successfully saved to ${targetTable} (Alarm: ${alarmCode})`);
-          } catch (err) { 
+          } catch (err) {
             console.error(`❌ DB Error (${targetTable}):`, err.message);
           }
         }

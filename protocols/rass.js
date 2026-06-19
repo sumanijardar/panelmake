@@ -220,7 +220,7 @@ function handleSocketEvents(socket, remoteIp, initialAccount = null) {
         const receivedtime = new Date().toISOString().slice(0, 19).replace('T', ' ');
 
         let priority = 'N', level = 0, targetTable = 'backalerts';
-        const configArr = panelConfigCache.get(currentAccount);
+        const configArr = panelConfigCache.get('RASS');
         if (configArr) {
           let matchedConfig = configArr.find(c => c.alarmCodeArr.includes(decoded.code));
           if (matchedConfig) {
