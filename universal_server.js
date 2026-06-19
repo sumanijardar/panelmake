@@ -29,19 +29,33 @@ const apiServer = http.createServer(async (req, res) => {
     }
 
     try {
+      let panelMake = null;
+      let handler = null;
+
       const [rows] = await pool.query(
         "SELECT Panel_Make FROM sites_zicom WHERE NewPanelID = ? LIMIT 1",
         [account]
       );
 
-      if (rows.length === 0) {
-        res.writeHead(404);
-        return res.end(JSON.stringify({ error: `Panel ID ${account} not found in database.` }));
+      if (rows.length > 0) {
+        panelMake = (rows[0].Panel_Make || "").toString().trim().toUpperCase();
+      } else {
+        // Fallback: Check if panel is actively connected (e.g. MAYUR direct connections)
+        const mayurDevices = mayurProtocol.getStatus().devices;
+        const rassDevices = rassProtocol.getStatus().devices;
+
+        if (mayurDevices.find(d => d.account === account && d.connected)) {
+          panelMake = 'MAYUR';
+        } else if (rassDevices.find(d => d.account === account && d.connected)) {
+          panelMake = 'RASS';
+        }
       }
 
-      const panelMake = (rows[0].Panel_Make || "").toString().trim().toUpperCase();
+      if (!panelMake) {
+        res.writeHead(404);
+        return res.end(JSON.stringify({ error: `Panel ID ${account} not found in database and is not actively connected.` }));
+      }
 
-      let handler = null;
       if (panelMake === 'MAYUR') handler = mayurProtocol;
       else if (panelMake === 'RASS') handler = rassProtocol;
 

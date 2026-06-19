@@ -190,8 +190,6 @@ function startServer() {
           let priority = 'N', level = 0, targetTable = 'alerts';
           const configsArray = panelConfigCache.get('MAYUR');
 
-          console.log(`🔍 [DEBUG] configsArray for MAYUR:`, JSON.stringify(configsArray, null, 2));
-
           if (configsArray) {
             let matchedConfig = null;
             for (const config of configsArray) {

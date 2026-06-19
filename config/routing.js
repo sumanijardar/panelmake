@@ -44,6 +44,7 @@ async function refreshCache() {
 }
 
 // Start auto-refresh interval (every 5 minutes)
+refreshCache(); // Initial cache population
 setInterval(refreshCache, 5 * 60 * 1000);
 
 module.exports = {
