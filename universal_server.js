@@ -40,13 +40,13 @@ const apiServer = http.createServer(async (req, res) => {
       if (rows.length > 0) {
         panelMake = (rows[0].Panel_Make || "").toString().trim().toUpperCase();
       } else {
-        // Fallback: Check if panel is actively connected (e.g. MAYUR direct connections)
+        // Fallback: Check if panel is actively connected OR has recently sent events
         const mayurDevices = mayurProtocol.getStatus().devices;
         const rassDevices = rassProtocol.getStatus().devices;
 
-        if (mayurDevices.find(d => d.account === account && d.connected)) {
+        if (mayurDevices.find(d => d.account === account && d.connected) || mayurProtocol.getEvents(account, 1).count > 0) {
           panelMake = 'MAYUR';
-        } else if (rassDevices.find(d => d.account === account && d.connected)) {
+        } else if (rassDevices.find(d => d.account === account && d.connected) || rassProtocol.getEvents(account, 1).count > 0) {
           panelMake = 'RASS';
         }
       }
