@@ -6,10 +6,41 @@ const pool = require("./config/database");
 const mayurProtocol = require("./protocols/mayur");
 const rassProtocol = require("./protocols/rass");
 
+const fs = require("fs");
+const path = require("path");
+
+// Load server configuration for enabling/disabling protocols
+let serverConfig = { RUN_MAYUR: true, RUN_RASS: true };
+const configPath = path.join(__dirname, 'server_config.json');
+
+try {
+  if (fs.existsSync(configPath)) {
+    serverConfig = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+  } else {
+    fs.writeFileSync(configPath, JSON.stringify(serverConfig, null, 2));
+  }
+} catch (err) {
+  console.log("⚠️ Could not load server_config.json, running both by default.");
+}
+
 // Start TCP Servers and dialers
+console.log("\n=================================");
 console.log("Starting Protocol Managers...");
-mayurProtocol.startServer();
-rassProtocol.startServer();
+console.log("=================================");
+
+if (serverConfig.RUN_MAYUR) {
+  console.log("✅ Starting MAYUR Protocol");
+  mayurProtocol.startServer();
+} else {
+  console.log("⏸️ MAYUR Protocol is DISABLED (Check server_config.json)");
+}
+
+if (serverConfig.RUN_RASS) {
+  console.log("✅ Starting RASS Protocol");
+  rassProtocol.startServer();
+} else {
+  console.log("⏸️ RASS Protocol is DISABLED (Check server_config.json)");
+}
 
 // ============================================================================
 // 🌐 UNIVERSAL HTTP API SERVER
