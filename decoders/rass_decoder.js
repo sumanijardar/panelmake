@@ -190,6 +190,10 @@ function decodeSIA(message) {
                     result.event = `Read Command Response: Output ${outNo} Status - ${outSt}`;
                     result.outputNo = outNo;
                     result.outputState = outSt;
+                } else if (cmdType === '008' && secParts.length >= 3) {
+                    const sysName = secParts[2].trim();
+                    result.event = `Read Command Response: System Name - ${sysName}`;
+                    result.systemName = sysName;
                 }
             }
             // NYY040 or NYY041 (Sensor status grids)
