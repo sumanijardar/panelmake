@@ -131,6 +131,8 @@ function getRASSCommandContent(commandName, zone = "000") {
   if (cmd === 'STAY' || cmd === 'PERIARM') return '[N|004|P]';
   if (cmd === 'SIREN_ON') return '[N|002|1]';
   if (cmd === 'SIREN_OFF') return '[N|002|0]';
+  if (cmd === 'SIREN_ENABLE') return '[N|002|2]';
+  if (cmd === 'SIREN_DISABLE') return '[N|002|3]';
   if (cmd === 'BYPASS') return `[N|003|${zoneStr}|1]`;
   if (cmd === 'UNBYPASS') return `[N|003|${zoneStr}|0]`;
   if (cmd === 'RESET') return '[N|000]';
@@ -140,10 +142,12 @@ function getRASSCommandContent(commandName, zone = "000") {
   if (cmd === 'READ_ARM_STATUS') return '[N|004|R]';
   if (cmd === 'READ_SIREN_STATUS') return '[N|002|R]';
   if (cmd === 'READ_ZONE_STATUS') return `[N|003|${zoneStr}|R]`;
+  if (cmd === 'READ_OUTPUT_STATUS') return `[N|005|${String(Number(zone)).padStart(2, '0')}|R]`;
   if (cmd === 'READ_SYSTEM_NAME') return '[N|008|R]';
 
-  if (cmd === 'OUTPUT_ON' || cmd === 'LIGHT_ON' || cmd === 'DVR_ON' || cmd === 'EML_ON') return `[N|005|${String(zone).padStart(2, '0')}|1]`;
-  if (cmd === 'OUTPUT_OFF' || cmd === 'LIGHT_OFF' || cmd === 'DVR_OFF' || cmd === 'EML_OFF') return `[N|005|${String(zone).padStart(2, '0')}|0]`;
+  const outStr = String(Number(zone)).padStart(2, '0');
+  if (cmd === 'OUTPUT_ON' || cmd === 'LIGHT_ON' || cmd === 'DVR_ON' || cmd === 'EML_ON') return `[N|005|${outStr}|1]`;
+  if (cmd === 'OUTPUT_OFF' || cmd === 'LIGHT_OFF' || cmd === 'DVR_OFF' || cmd === 'EML_OFF') return `[N|005|${outStr}|0]`;
 
   return null;
 }
@@ -295,7 +299,7 @@ function initiatePanelConnection(panelId, ip) {
 
 async function connectToAllPanels() {
   try {
-    const [rows] = await pool.query("SELECT NewPanelID, dvrip FROM sites_zicom WHERE Panel_Make LIKE 'rass' AND dvrip IS NOT NULL AND dvrip != ''");
+    const [rows] = await pool.query("SELECT NewPanelID, dvrip FROM sites_zicom WHERE Panel_Make LIKE 'rass' AND dvrip IS NOT NULL AND dvrip != '' LIMIT 15");
     if (rows && rows.length > 0) {
       console.log(`\n🔄 [RASS] Found ${rows.length} RASS panels with IPs in database. Initiating outgoing connections...`);
       for (const row of rows) {
