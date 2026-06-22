@@ -153,6 +153,45 @@ function decodeSIA(message) {
                 result.clientId = secParts[2];
                 result.panelId = secParts[3];
             }
+            // NYY004 (Read Commands Response)
+            else if (result.zone === '004' && secParts.length > 1) {
+                const cmdType = secParts[1];
+                if (cmdType === '002' && secParts.length >= 4) {
+                    const sirenState = secParts[2] === '1' ? 'ON' : 'OFF';
+                    const sirenEnable = secParts[3] === '1' ? 'Enabled' : 'Disabled';
+                    result.event = `Read Command Response: Siren Status - ${sirenState}, ${sirenEnable}`;
+                    result.sirenState = sirenState;
+                    result.sirenEnable = sirenEnable;
+                } else if (cmdType === '003' && secParts.length >= 4) {
+                    const z = secParts[2];
+                    const st = secParts[3];
+                    let stDesc = "Unknown";
+                    if (st === 'U') stDesc = "Uninstalled";
+                    else if (st === 'R') stDesc = "Restored/Normal";
+                    else if (st === 'B') stDesc = "Bypassed";
+                    else if (st === 'A') stDesc = "Alarm";
+                    result.event = `Read Command Response: Zone ${z} Status - ${stDesc}`;
+                    result.sensors = [{ zone: z, status: st, description: stDesc }];
+                } else if (cmdType === '004' && secParts.length >= 4) {
+                    const panelEn = secParts[2] === '1' ? 'Enabled' : 'Disabled';
+                    const armSt = secParts[3];
+                    let armDesc = "Unknown";
+                    if (armSt === '1') armDesc = "Armed";
+                    else if (armSt === '2') armDesc = "Disarmed";
+                    else if (armSt === '3') armDesc = "Partial Disarm / Stay";
+                    else if (armSt === '4') armDesc = "Entry Delay";
+                    else if (armSt === '5') armDesc = "Exit Delay";
+                    result.event = `Read Command Response: Panel Status - ${panelEn}, ${armDesc}`;
+                    result.panelEnabled = panelEn;
+                    result.armStatus = armDesc;
+                } else if (cmdType === '005' && secParts.length >= 4) {
+                    const outNo = secParts[2];
+                    const outSt = secParts[3] === '1' ? 'ON' : 'OFF';
+                    result.event = `Read Command Response: Output ${outNo} Status - ${outSt}`;
+                    result.outputNo = outNo;
+                    result.outputState = outSt;
+                }
+            }
             // NYY040 or NYY041 (Sensor status grids)
             else if ((result.zone === '040' || result.zone === '041') && secParts.length > 1) {
                 const sensors = [];
