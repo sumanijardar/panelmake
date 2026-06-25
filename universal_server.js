@@ -5,12 +5,13 @@ const pool = require("./config/database");
 // Import protocol handlers
 const mayurProtocol = require("./protocols/mayur");
 const rassProtocol = require("./protocols/rass");
+const smartiProtocol = require("./protocols/smarti");
 
 const fs = require("fs");
 const path = require("path");
 
 // Load server configuration for enabling/disabling protocols
-let serverConfig = { RUN_MAYUR: true, RUN_RASS: true };
+let serverConfig = { RUN_MAYUR: true, RUN_RASS: true, RUN_SMARTI: true };
 const configPath = path.join(__dirname, 'server_config.json');
 
 try {
@@ -40,6 +41,13 @@ if (serverConfig.RUN_RASS) {
   rassProtocol.startServer();
 } else {
   console.log("⏸️ RASS Protocol is DISABLED (Check server_config.json)");
+}
+
+if (serverConfig.RUN_SMARTI) {
+  console.log("✅ Starting SMARTI Protocol");
+  smartiProtocol.startServer();
+} else {
+  console.log("⏸️ SMARTI Protocol is DISABLED (Check server_config.json)");
 }
 
 // ============================================================================
@@ -74,11 +82,14 @@ const apiServer = http.createServer(async (req, res) => {
         // Fallback: Check if panel is actively connected OR has recently sent events
         const mayurDevices = mayurProtocol.getStatus().devices;
         const rassDevices = rassProtocol.getStatus().devices;
+        const smartiDevices = smartiProtocol.getStatus().devices;
 
         if (mayurDevices.find(d => d.account === account && d.connected) || mayurProtocol.getEvents(account, 1).count > 0) {
           panelMake = 'MAYUR';
         } else if (rassDevices.find(d => d.account === account && d.connected) || rassProtocol.getEvents(account, 1).count > 0) {
           panelMake = 'RASS';
+        } else if (smartiDevices.find(d => d.account === account && d.connected) || smartiProtocol.getEvents(account, 1).count > 0) {
+          panelMake = 'SMARTI';
         }
       }
 
@@ -89,6 +100,7 @@ const apiServer = http.createServer(async (req, res) => {
 
       if (panelMake === 'MAYUR') handler = mayurProtocol;
       else if (panelMake === 'RASS') handler = rassProtocol;
+      else if (panelMake === 'SMARTI') handler = smartiProtocol;
 
       if (!handler) {
         res.writeHead(400);
@@ -159,8 +171,9 @@ const apiServer = http.createServer(async (req, res) => {
       // If no account specified, combine events from both
       const mayurEvts = mayurProtocol.getEvents(null, last).events;
       const rassEvts = rassProtocol.getEvents(null, last).events;
+      const smartiEvts = smartiProtocol.getEvents(null, last).events;
       res.writeHead(200);
-      res.end(JSON.stringify({ success: true, count: mayurEvts.length + rassEvts.length, mayurEvents: mayurEvts, rassEvents: rassEvts }));
+      res.end(JSON.stringify({ success: true, count: mayurEvts.length + rassEvts.length + smartiEvts.length, mayurEvents: mayurEvts, rassEvents: rassEvts, smartiEvents: smartiEvts }));
     }
   }
 
@@ -168,8 +181,9 @@ const apiServer = http.createServer(async (req, res) => {
   else if (parsedUrl.pathname === '/api/status' && req.method === 'GET') {
     const mayurStatus = mayurProtocol.getStatus().devices;
     const rassStatus = rassProtocol.getStatus().devices;
+    const smartiStatus = smartiProtocol.getStatus().devices;
     res.writeHead(200);
-    res.end(JSON.stringify({ success: true, mayur: mayurStatus, rass: rassStatus }));
+    res.end(JSON.stringify({ success: true, mayur: mayurStatus, rass: rassStatus, smarti: smartiStatus }));
   }
 
   else {

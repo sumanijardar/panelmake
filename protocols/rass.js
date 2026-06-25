@@ -219,7 +219,7 @@ function handleSocketEvents(socket, remoteIp, initialAccount = null) {
         connectWaiters.set(currentAccount, []);
       }
 
-      if (decoded.code && decoded.code !== 'YY') {
+      if (decoded.code) {
         const seqno = header ? header.sequence : '0000';
         const receivedtime = new Date().toISOString().slice(0, 19).replace('T', ' ');
 
