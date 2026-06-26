@@ -61,26 +61,32 @@ function buildACK(header) {
   return `\n${crc}${len}${body}\r`;
 }
 
-// Commands mapping based on typical generic SIA codes 
+// Commands mapping based on VcopIP (SMART -I) protocol
 const COMMAND_MAP = {
-  'ARM': 'CG',
-  'DISARM': 'OG',
-  'STAY': 'NL',
-  'SIREN_ON': 'YA',
-  'SIREN_OFF': 'YH',
-  'RC': 'RC',
-  'RO': 'RO'
+  'ARM': '[N|005|A]',
+  'DISARM': '[N|005|D]',
+  'STAY': '[N|005|S]',
+  'SIREN_ON': '[N|002|1]',
+  'SIREN_OFF': '[N|002|0]',
+  'RESET': '[N|000]',
+  'STATUS': 'NYY040' // Query zone status
 };
 
 function buildSIACommand(commandType, account, zone = "000", receiver = "R000001", line = "L000000") {
-  const siaCode = COMMAND_MAP[commandType.toUpperCase()];
-  if (!siaCode) return null;
+  const commandPayload = COMMAND_MAP[commandType.toUpperCase()];
+  if (!commandPayload) return null;
 
   const seq = String(outSequence++).padStart(4, '0');
   if (outSequence > 9999) outSequence = 1;
   const ts = getTimestamp();
 
-  const dataWithoutTs = `"SIA-DCS"${seq}${receiver}${line}#${account}[#${account}|N${siaCode}${zone}]`;
+  let dataWithoutTs;
+  if (commandType.toUpperCase() === 'STATUS') {
+    dataWithoutTs = `"SIA-DCS"${seq}${receiver}${line}#${account}[#${account}|NYY040]`;
+  } else {
+    dataWithoutTs = `"SIA-DCS"${seq}${receiver}${line}#${account}[#${account}|NYY005]${commandPayload}`;
+  }
+
   const dataWithTs = dataWithoutTs + '_' + ts;
   const crc = calculateCRC16(dataWithTs);
   const len = calculateLength(dataWithTs);
@@ -187,7 +193,7 @@ function handleSocketEvents(socket, remoteIp, initialAccount = null) {
 
         try {
           await pool.query(`INSERT INTO alerts_copy (panelid, seqno, zone, alarm, createtime, alerttype, status) VALUES (?, ?, ?, ?, ?, ?,'O')`, baseValues);
-        } catch (err) {}
+        } catch (err) { }
 
         try {
           await pool.query(`INSERT INTO ${targetTable} (panelid, seqno, zone, alarm, createtime, alerttype, status, priority, level) VALUES (?, ?, ?, ?, ?, ?, 'O', ?, ?)`, [...baseValues, priority, level]);
@@ -239,17 +245,17 @@ function handleSocketEvents(socket, remoteIp, initialAccount = null) {
 function initiatePanelConnection(panelId, ip) {
   console.log(`\n⏳ [SMARTI] Attempting OUTGOING connection to Panel #${panelId} at IP: ${ip}:${TCP_PORT}...`);
   const socket = new net.Socket();
-  
+
   socket.connect(TCP_PORT, ip, () => {
     console.log(`✅ [SMARTI] Successfully connected to Panel #${panelId} (${ip})`);
     activeSockets.set(panelId, socket);
     handleSocketEvents(socket, ip, panelId);
   });
-  
+
   socket.on("error", (err) => {
     console.log(`❌ [SMARTI] Connection failed to Panel #${panelId} (${ip}): ${err.message}`);
   });
-  
+
   socket.on("close", () => {
     console.log(`⚠️ [SMARTI] Connection closed for Panel #${panelId} (${ip}). Retrying in 3 minutes...`);
     setTimeout(() => {
@@ -262,16 +268,16 @@ function initiatePanelConnection(panelId, ip) {
 
 async function connectToAllPanels() {
   try {
-    const [rows] = await pool.query("SELECT NewPanelID, dvrip FROM sites_zicom WHERE Panel_Make LIKE 'SMART-I' AND dvrip IS NOT NULL AND dvrip != '' LIMIT 15");
+    const [rows] = await pool.query("SELECT NewPanelID, dvrip FROM sites_zicom WHERE Panel_Make LIKE 'SMART -I' AND dvrip IS NOT NULL AND dvrip != '' LIMIT 15");
     if (rows && rows.length > 0) {
-      console.log(`\n🔄 [SMARTI] Found ${rows.length} SMART-I panels with IPs in database. Initiating outgoing connections...`);
+      console.log(`\n🔄 [SMARTI] Found ${rows.length} SMART -I panels with IPs in database. Initiating outgoing connections...`);
       for (const row of rows) {
         const panelId = String(row.NewPanelID).trim();
         const ip = String(row.dvrip).trim();
         if (!activeSockets.has(panelId)) initiatePanelConnection(panelId, ip);
       }
     } else {
-      console.log(`\nℹ️ [SMARTI] No SMART-I panels found in database with valid IP for outgoing connection.`);
+      console.log(`\nℹ️ [SMARTI] No SMART -I panels found in database with valid IP for outgoing connection.`);
     }
   } catch (err) {
     console.error(`❌ [SMARTI] Error fetching panels from DB for outgoing connections:`, err.message);
