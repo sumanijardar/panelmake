@@ -79,12 +79,15 @@ function buildSIACommand(commandType, account, zone = "000", receiver = "R000001
   const seq = String(outSequence++).padStart(4, '0');
   if (outSequence > 9999) outSequence = 1;
   const ts = getTimestamp();
+  
+  // Zicom panels strictly expect a 6-digit account number (e.g., #040205 instead of #40205)
+  const paddedAccount = String(account).padStart(6, '0');
 
   let dataWithoutTs;
   if (commandType.toUpperCase() === 'STATUS') {
-    dataWithoutTs = `"SIA-DCS"${seq}${receiver}${line}#${account}[#${account}|NYY040]`;
+    dataWithoutTs = `"SIA-DCS"${seq}${receiver}${line}#${paddedAccount}[#${paddedAccount}|NYY040]`;
   } else {
-    dataWithoutTs = `"SIA-DCS"${seq}${receiver}${line}#${account}[#${account}|NYY005]${commandPayload}`;
+    dataWithoutTs = `"SIA-DCS"${seq}${receiver}${line}#${paddedAccount}[#${paddedAccount}|NYY005]${commandPayload}`;
   }
 
   const dataWithTs = dataWithoutTs + '_' + ts;
@@ -92,7 +95,7 @@ function buildSIACommand(commandType, account, zone = "000", receiver = "R000001
   const len = calculateLength(dataWithTs);
   const result = `\n${crc}${len}${dataWithTs}\r`;
 
-  console.log(`\n🛠️  [CONSTRUCTED SMAERTI SIA COMMAND] Type: ${commandType}, Account: ${account}`);
+  console.log(`\n🛠️  [CONSTRUCTED SMAERTI SIA COMMAND] Type: ${commandType}, Account: ${paddedAccount}`);
   return result;
 }
 
