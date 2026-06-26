@@ -109,134 +109,183 @@ function sendCommandToPanel(socket, commandType, accountNo, zone = "000") {
 // ==========================================
 // 1. TCP SERVER
 // ==========================================
-function startServer() {
-  const tcpServer = net.createServer((socket) => {
-    console.log("📡 SMAERTI Device TCP Connection Initiated");
-    let currentAccount = null;
-    socket.setKeepAlive(true, 30000);
-    socket.setTimeout(0);
+function handleSocketEvents(socket, remoteIp, initialAccount = null) {
+  let currentAccount = initialAccount;
+  socket.setKeepAlive(true, 30000);
+  socket.setTimeout(180000);
 
-    socket.on("data", async (data) => {
-      const message = data.toString().trim();
-      if (!message) return;
+  socket.on("timeout", () => socket.destroy());
+  socket.on("data", async (data) => {
+    const message = data.toString().trim();
+    if (!message) return;
 
-      console.log(`\n📩 [SMAERTI] Raw Data Received:`, message);
+    console.log(`\n📩 [SMARTI] Raw Data Received: ${message}`);
 
-      const header = parseSIAHeader(message);
-      const decoded = decodeSIA(message);
+    const header = parseSIAHeader(message);
+    const decoded = decodeSIA(message);
 
-      console.log(`🔓 [SMAERTI] Decoded Meaning:`);
-      console.log(JSON.stringify(decoded, null, 2));
+    console.log(`🔓 [SMARTI] Decoded Meaning:`);
+    console.log(JSON.stringify(decoded, null, 2));
 
-      if (header && !decoded.account) {
-        decoded.account = header.account;
+    if (header && !decoded.account) {
+      decoded.account = header.account;
+    }
+
+    let crcOK = false, lenOK = false;
+    if (header) {
+      const dataBody = message.substring(8);
+      const calculatedCRC = calculateCRC16(dataBody);
+      const calculatedLen = calculateLength(dataBody);
+      crcOK = header.crc.toUpperCase() === calculatedCRC.toUpperCase();
+      lenOK = header.length.toUpperCase() === calculatedLen.toUpperCase();
+    }
+
+    if (decoded.account) {
+      currentAccount = decoded.account;
+      activeSockets.set(currentAccount, socket);
+
+      const waiters = connectWaiters.get(currentAccount);
+      if (waiters && waiters.length > 0) {
+        for (const resolve of waiters) resolve({ account: currentAccount });
+        connectWaiters.set(currentAccount, []);
       }
 
-      let crcOK = false, lenOK = false;
-      if (header) {
-        const dataBody = message.substring(8);
-        const calculatedCRC = calculateCRC16(dataBody);
-        const calculatedLen = calculateLength(dataBody);
-        crcOK = header.crc.toUpperCase() === calculatedCRC.toUpperCase();
-        lenOK = header.length.toUpperCase() === calculatedLen.toUpperCase();
-      }
+      if (decoded.code) {
+        const seqno = header ? header.sequence : '0000';
+        const alarmCode = decoded.code;
+        const receivedtime = new Date().toISOString().slice(0, 19).replace('T', ' ');
 
-      if (decoded.account) {
-        currentAccount = decoded.account;
-        activeSockets.set(currentAccount, socket);
+        let priority = 'N', level = 0, targetTable = 'alerts';
+        const configsArray = panelConfigCache.get('SMARTI'); // Or use account specific
 
-        const waiters = connectWaiters.get(currentAccount);
-        if (waiters && waiters.length > 0) {
-          for (const resolve of waiters) resolve({ account: currentAccount });
-          connectWaiters.set(currentAccount, []);
-        }
-
-        if (decoded.code) {
-          const seqno = header ? header.sequence : '0000';
-          const alarmCode = decoded.code;
-          const receivedtime = new Date().toISOString().slice(0, 19).replace('T', ' ');
-
-          let priority = 'N', level = 0, targetTable = 'alerts';
-          const configsArray = panelConfigCache.get('SMAERTI'); // Or use account specific
-
-          if (configsArray) {
-            let matchedConfig = null;
-            for (const config of configsArray) {
-              if (config.alarmCodeArr.includes(alarmCode)) {
-                matchedConfig = config;
-                break;
-              }
-            }
-
-            if (matchedConfig) {
-              if (matchedConfig.destination === 'back') {
-                targetTable = 'backalerts';
-              } else if (matchedConfig.destination === 'front') {
-                targetTable = 'alerts';
-                if (matchedConfig.level1Arr.includes(alarmCode)) { level = 1; priority = 'Y'; }
-                else if (matchedConfig.level2Arr.includes(alarmCode)) { level = 2; priority = 'Y'; }
-                else if (matchedConfig.level3Arr.includes(alarmCode)) { level = 3; priority = 'Y'; }
-                else { level = 0; priority = matchedConfig.rowPriority; }
-              }
+        if (configsArray) {
+          let matchedConfig = null;
+          for (const config of configsArray) {
+            if (config.alarmCodeArr.includes(alarmCode)) {
+              matchedConfig = config;
+              break;
             }
           }
 
-          const baseValues = [
-            currentAccount, seqno, decoded.zone || '000', alarmCode,
-            decoded.formattedDate || receivedtime, decoded.event || ''
-          ];
-
-          try {
-            await pool.query(`INSERT INTO alerts_copy (panelid, seqno, zone, alarm, createtime, alerttype, status) VALUES (?, ?, ?, ?, ?, ?,'O')`, baseValues);
-          } catch (err) {
-            console.error("❌ DB Error (alerts_copy):", err.message);
-          }
-
-          try {
-            await pool.query(`INSERT INTO ${targetTable} (panelid, seqno, zone, alarm, createtime, alerttype, status, priority, level) VALUES (?, ?, ?, ?, ?, ?, 'O', ?, ?)`, [...baseValues, priority, level]);
-            console.log(`✅ [SMAERTI] Data successfully saved to ${targetTable} (Alarm: ${alarmCode})`);
-          } catch (err) {
-            console.error(`❌ DB Error (${targetTable}):`, err.message);
-          }
-        }
-      }
-
-      eventLog.unshift({
-        ...decoded,
-        raw: message,
-        crcValid: crcOK,
-        receivedAt: new Date().toISOString()
-      });
-      if (eventLog.length > MAX_LOG) eventLog.pop();
-
-      if (header && !socket.destroyed) {
-        let commandSentFromQueue = false;
-        if (currentAccount) {
-          const queue = commandQueue.get(currentAccount);
-          if (queue && queue.length > 0) {
-            const pending = [...queue];
-            commandQueue.set(currentAccount, []);
-            for (const item of pending) {
-              const cmd = buildSIACommand(item.command, currentAccount, item.zone || '000');
-              if (cmd) {
-                socket.write(cmd);
-                commandSentFromQueue = true;
-                if (item.resolve) item.resolve({ sent: true, command: item.command, zone: item.zone || '000', sentAt: new Date().toISOString() });
-              } else {
-                if (item.resolve) item.resolve({ sent: false, command: item.command });
-              }
+          if (matchedConfig) {
+            if (matchedConfig.destination === 'back') {
+              targetTable = 'backalerts';
+            } else if (matchedConfig.destination === 'front') {
+              targetTable = 'alerts';
+              if (matchedConfig.level1Arr.includes(alarmCode)) { level = 1; priority = 'Y'; }
+              else if (matchedConfig.level2Arr.includes(alarmCode)) { level = 2; priority = 'Y'; }
+              else if (matchedConfig.level3Arr.includes(alarmCode)) { level = 3; priority = 'Y'; }
+              else { level = 0; priority = matchedConfig.rowPriority; }
             }
           }
         }
-        if (!commandSentFromQueue) {
-          socket.write(buildACK(header));
+
+        const baseValues = [
+          currentAccount, seqno, decoded.zone || '000', alarmCode,
+          decoded.formattedDate || receivedtime, decoded.event || ''
+        ];
+
+        try {
+          await pool.query(`INSERT INTO alerts_copy (panelid, seqno, zone, alarm, createtime, alerttype, status) VALUES (?, ?, ?, ?, ?, ?,'O')`, baseValues);
+        } catch (err) {}
+
+        try {
+          await pool.query(`INSERT INTO ${targetTable} (panelid, seqno, zone, alarm, createtime, alerttype, status, priority, level) VALUES (?, ?, ?, ?, ?, ?, 'O', ?, ?)`, [...baseValues, priority, level]);
+          console.log(`✅ [SMARTI] Data successfully saved to ${targetTable} (Alarm: ${alarmCode})`);
+        } catch (err) {
+          console.error(`❌ DB Error (${targetTable}):`, err.message);
         }
       }
+    }
+
+    eventLog.unshift({
+      ...decoded,
+      raw: message,
+      crcValid: crcOK,
+      receivedAt: new Date().toISOString()
     });
+    if (eventLog.length > MAX_LOG) eventLog.pop();
 
-    socket.on("end", () => { if (currentAccount) activeSockets.delete(currentAccount); });
-    socket.on("error", () => { });
-    socket.on("close", () => { if (currentAccount) activeSockets.delete(currentAccount); });
+    if (header && !socket.destroyed) {
+      let commandSentFromQueue = false;
+      if (currentAccount) {
+        const queue = commandQueue.get(currentAccount);
+        if (queue && queue.length > 0) {
+          const pending = [...queue];
+          commandQueue.set(currentAccount, []);
+          for (const item of pending) {
+            const cmd = buildSIACommand(item.command, currentAccount, item.zone || '000');
+            if (cmd) {
+              socket.write(cmd);
+              commandSentFromQueue = true;
+              if (item.resolve) item.resolve({ sent: true, command: item.command, zone: item.zone || '000', sentAt: new Date().toISOString() });
+            } else {
+              if (item.resolve) item.resolve({ sent: false, command: item.command });
+            }
+          }
+        }
+      }
+      if (!commandSentFromQueue && !message.includes('"ACK"')) {
+        socket.write(buildACK(header));
+      }
+    }
+  });
+
+  socket.on("end", () => { if (currentAccount) activeSockets.delete(currentAccount); });
+  socket.on("error", () => { });
+  socket.on("close", () => { if (currentAccount) activeSockets.delete(currentAccount); });
+}
+
+function initiatePanelConnection(panelId, ip) {
+  console.log(`\n⏳ [SMARTI] Attempting OUTGOING connection to Panel #${panelId} at IP: ${ip}:${TCP_PORT}...`);
+  const socket = new net.Socket();
+  
+  socket.connect(TCP_PORT, ip, () => {
+    console.log(`✅ [SMARTI] Successfully connected to Panel #${panelId} (${ip})`);
+    activeSockets.set(panelId, socket);
+    handleSocketEvents(socket, ip, panelId);
+  });
+  
+  socket.on("error", (err) => {
+    console.log(`❌ [SMARTI] Connection failed to Panel #${panelId} (${ip}): ${err.message}`);
+  });
+  
+  socket.on("close", () => {
+    console.log(`⚠️ [SMARTI] Connection closed for Panel #${panelId} (${ip}). Retrying in 3 minutes...`);
+    setTimeout(() => {
+      if (!activeSockets.has(panelId) || activeSockets.get(panelId).destroyed) {
+        initiatePanelConnection(panelId, ip);
+      }
+    }, 180000); // 3 minutes
+  });
+}
+
+async function connectToAllPanels() {
+  try {
+    const [rows] = await pool.query("SELECT NewPanelID, dvrip FROM sites_zicom WHERE Panel_Make LIKE 'SMART-I' AND dvrip IS NOT NULL AND dvrip != '' LIMIT 15");
+    if (rows && rows.length > 0) {
+      console.log(`\n🔄 [SMARTI] Found ${rows.length} SMART-I panels with IPs in database. Initiating outgoing connections...`);
+      for (const row of rows) {
+        const panelId = String(row.NewPanelID).trim();
+        const ip = String(row.dvrip).trim();
+        if (!activeSockets.has(panelId)) initiatePanelConnection(panelId, ip);
+      }
+    } else {
+      console.log(`\nℹ️ [SMARTI] No SMART-I panels found in database with valid IP for outgoing connection.`);
+    }
+  } catch (err) {
+    console.error(`❌ [SMARTI] Error fetching panels from DB for outgoing connections:`, err.message);
+  }
+}
+
+function startServer() {
+  connectToAllPanels();
+  setInterval(connectToAllPanels, 180000); // 3 minutes
+
+  const tcpServer = net.createServer((socket) => {
+    const remoteIp = socket.remoteAddress ? socket.remoteAddress.replace(/^.*:/, '').trim() : null;
+    console.log(`\n📡 [SMARTI] Device TCP Connection Initiated from IP: ${remoteIp}`);
+    handleSocketEvents(socket, remoteIp);
   });
 
   tcpServer.listen(TCP_PORT, () => {

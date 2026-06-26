@@ -100,7 +100,7 @@ const apiServer = http.createServer(async (req, res) => {
 
       if (panelMake === 'MAYUR') handler = mayurProtocol;
       else if (panelMake === 'RASS') handler = rassProtocol;
-      else if (panelMake === 'SMARTI') handler = smartiProtocol;
+      else if (panelMake === 'SMART-I') handler = smartiProtocol;
 
       if (!handler) {
         res.writeHead(400);

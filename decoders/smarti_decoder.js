@@ -178,7 +178,33 @@ const ZONE_MAP = {
         "name": "Smoke sensor",
         "alarmCode": "BA",
         "restoreCode": "BR"
-    }
+    },
+    "172": { "name": "EB Status", "alarmCode": "BA", "restoreCode": "BR" },
+    "173": { "name": "UPS Fail", "alarmCode": "BA", "restoreCode": "BR" },
+    "180": { "name": "Transaction Pending count", "alarmCode": "BR", "restoreCode": "BR" },
+    "190": { "name": "Energy Meter Comm", "alarmCode": "BA", "restoreCode": "BR" },
+    "191": { "name": "Login card", "alarmCode": "BA", "restoreCode": "BR" },
+    "192": { "name": "UPS Card", "alarmCode": "BA", "restoreCode": "BR" },
+    "193": { "name": "EIU card", "alarmCode": "BA", "restoreCode": "BR" },
+    "194": { "name": "PM Card", "alarmCode": "BA", "restoreCode": "BR" },
+    "195": { "name": "Arming card", "alarmCode": "BA", "restoreCode": "BR" },
+    "200": { "name": "Temperature T1", "alarmCode": "YY", "restoreCode": "YY" },
+    "204": { "name": "Light Intensity", "alarmCode": "YY", "restoreCode": "YY" },
+    "205": { "name": "Input Ac Volt", "alarmCode": "YY", "restoreCode": "YY" },
+    "206": { "name": "Output Ac Volt", "alarmCode": "YY", "restoreCode": "YY" },
+    "207": { "name": "Ups Dc Volt", "alarmCode": "YY", "restoreCode": "YY" },
+    "218": { "name": "Hooter Acknowledge", "alarmCode": "BA", "restoreCode": "BR" },
+    "219": { "name": "Magnetic lock", "alarmCode": "BA", "restoreCode": "BR" },
+    "220": { "name": "LBA Login", "alarmCode": "BA", "restoreCode": "BR" },
+    "221": { "name": "CRA Login", "alarmCode": "BA", "restoreCode": "BR" },
+    "222": { "name": "FLM/SLM Login", "alarmCode": "BA", "restoreCode": "BR" },
+    "223": { "name": "CCA Login", "alarmCode": "BA", "restoreCode": "BR" },
+    "224": { "name": "PO Login", "alarmCode": "BA", "restoreCode": "BR" },
+    "225": { "name": "HK Login", "alarmCode": "BA", "restoreCode": "BR" },
+    "226": { "name": "GM Login", "alarmCode": "BA", "restoreCode": "BR" },
+    "227": { "name": "STM Login", "alarmCode": "BA", "restoreCode": "BR" },
+    "228": { "name": "Wrong Id", "alarmCode": "YY", "restoreCode": "YY" },
+    "300": { "name": "OTP server details", "alarmCode": "YY", "restoreCode": "YY" }
 };
 
 // Some generic SIA events from documentation in case of no zone match
