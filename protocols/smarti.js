@@ -72,7 +72,7 @@ const COMMAND_MAP = {
   'RO': 'RO'
 };
 
-function buildSIACommand(commandType, account, zone = "000", receiver = "R0", line = "L0") {
+function buildSIACommand(commandType, account, zone = "000", receiver = "R000001", line = "L000000") {
   const siaCode = COMMAND_MAP[commandType.toUpperCase()];
   if (!siaCode) return null;
 
